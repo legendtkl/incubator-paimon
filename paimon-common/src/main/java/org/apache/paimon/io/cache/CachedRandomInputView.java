@@ -30,9 +30,9 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * A {@link SeekableDataInputView} to read bytes from {@link RandomAccessFile}, the bytes can be
@@ -55,7 +55,7 @@ public class CachedRandomInputView extends AbstractPagedInputView
         this.file = new RandomAccessFile(file, "r");
         this.fileLength = file.length();
         this.cacheManager = cacheManager;
-        this.segments = new HashMap<>();
+        this.segments = new ConcurrentHashMap<>();
         int segmentSize = cacheManager.pageSize();
         this.segmentSizeBits = MathUtils.log2strict(segmentSize);
         this.segmentSizeMask = segmentSize - 1;
@@ -73,9 +73,16 @@ public class CachedRandomInputView extends AbstractPagedInputView
     }
 
     private MemorySegment getCurrentPage() {
-        return segments.computeIfAbsent(
-                currentSegmentIndex,
-                key -> cacheManager.getPage(file, currentSegmentIndex, this::invalidPage));
+        MemorySegment segment;
+        if ((segment = segments.get(currentSegmentIndex)) == null) {
+            MemorySegment newSegment;
+            if ((newSegment = cacheManager.getPage(file, currentSegmentIndex, this::invalidPage))
+                    != null) {
+                segments.put(currentSegmentIndex, newSegment);
+                return newSegment;
+            }
+        }
+        return segment;
     }
 
     @Override
