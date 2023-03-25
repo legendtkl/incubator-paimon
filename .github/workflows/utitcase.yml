@@ -36,7 +36,7 @@ jobs:
         uses: actions/setup-java@v2
         with:
           java-version: '11'
-          distribution: 'adopt'
+          distribution: 'oracle'
       - name: Build
         run: ./mvnw clean install -DskipTests
       - name: Test
