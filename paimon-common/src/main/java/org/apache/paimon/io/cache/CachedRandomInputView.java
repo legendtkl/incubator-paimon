@@ -33,6 +33,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * A {@link SeekableDataInputView} to read bytes from {@link RandomAccessFile}, the bytes can be
@@ -49,6 +51,18 @@ public class CachedRandomInputView extends AbstractPagedInputView
     private final int segmentSizeMask;
 
     private int currentSegmentIndex;
+
+    /**
+     * The thread pool is involved to solve computeIfAbsent issue. From JDK 9, computeIfAbsent will
+     * throw ConcurrentModificationException if it is detected that the mapping function modifies
+     * this map during computation. So we add the thread pool to remove segments expired page. To
+     * guarantee the concurrency safety, we need to replace the HashMap with ConcurrentHashMap.
+     *
+     * <p>Note: if the cache expires many pages in a while, the single thread executor can't process
+     * it. That means, some remove actions are blocked, this will cause dirty data read. But this
+     * occurs with low probability.
+     */
+    ExecutorService executor = Executors.newSingleThreadExecutor();
 
     public CachedRandomInputView(File file, CacheManager cacheManager)
             throws FileNotFoundException {
@@ -73,16 +87,9 @@ public class CachedRandomInputView extends AbstractPagedInputView
     }
 
     private MemorySegment getCurrentPage() {
-        MemorySegment segment;
-        if ((segment = segments.get(currentSegmentIndex)) == null) {
-            MemorySegment newSegment;
-            if ((newSegment = cacheManager.getPage(file, currentSegmentIndex, this::invalidPage))
-                    != null) {
-                segments.put(currentSegmentIndex, newSegment);
-                return newSegment;
-            }
-        }
-        return segment;
+        return segments.computeIfAbsent(
+                currentSegmentIndex,
+                key -> cacheManager.getPage(file, currentSegmentIndex, this::invalidPage));
     }
 
     @Override
@@ -101,7 +108,7 @@ public class CachedRandomInputView extends AbstractPagedInputView
     }
 
     private void invalidPage(int pageNumber) {
-        segments.remove(pageNumber);
+        executor.submit(() -> segments.remove(pageNumber));
     }
 
     @Override
