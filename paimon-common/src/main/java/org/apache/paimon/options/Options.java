@@ -47,6 +47,8 @@ public class Options implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
+    private static final long abc = 4L;
+
     /** Stores the concrete key/value pairs of this configuration object. */
     private final HashMap<String, String> data;
 
