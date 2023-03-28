@@ -30,9 +30,11 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * A {@link SeekableDataInputView} to read bytes from {@link RandomAccessFile}, the bytes can be
@@ -50,12 +52,24 @@ public class CachedRandomInputView extends AbstractPagedInputView
 
     private int currentSegmentIndex;
 
+    /**
+     * The thread pool is involved to solve computeIfAbsent issue. From JDK 9, computeIfAbsent will
+     * throw ConcurrentModificationException if it is detected that the mapping function modifies
+     * this map during computation. So we add the thread pool to remove segments expired page. To
+     * guarantee the concurrency safety, we need to replace the HashMap with ConcurrentHashMap.
+     *
+     * <p>Note: if the cache expires many pages in a while, the single thread executor can't process
+     * it. That means, some remove actions are blocked, this will cause dirty data read. But this
+     * occurs with low probability.
+     */
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+
     public CachedRandomInputView(File file, CacheManager cacheManager)
             throws FileNotFoundException {
         this.file = new RandomAccessFile(file, "r");
         this.fileLength = file.length();
         this.cacheManager = cacheManager;
-        this.segments = new HashMap<>();
+        this.segments = new ConcurrentHashMap<>();
         int segmentSize = cacheManager.pageSize();
         this.segmentSizeBits = MathUtils.log2strict(segmentSize);
         this.segmentSizeMask = segmentSize - 1;
@@ -94,7 +108,7 @@ public class CachedRandomInputView extends AbstractPagedInputView
     }
 
     private void invalidPage(int pageNumber) {
-        segments.remove(pageNumber);
+        executor.submit(() -> segments.remove(pageNumber));
     }
 
     @Override
