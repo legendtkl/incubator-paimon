@@ -19,7 +19,7 @@
 name: UTCase and ITCase Non Flink
 
 on:
-  push:
+  # push:
   pull_request:
     paths-ignore:
       - 'docs/**'

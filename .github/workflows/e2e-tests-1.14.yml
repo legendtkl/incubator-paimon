@@ -19,7 +19,7 @@
 name: End to End Tests Flink 1.14
 
 on:
-  push:
+  # push:
   pull_request:
     paths-ignore:
       - 'docs/**'
