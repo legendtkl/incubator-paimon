@@ -21,6 +21,8 @@ package org.apache.paimon.options;
 import org.apache.paimon.table.TableType;
 
 import java.time.Duration;
+import java.util.HashSet;
+import java.util.Set;
 
 import static org.apache.paimon.options.ConfigOptions.key;
 
@@ -75,4 +77,18 @@ public class CatalogOptions {
                     .defaultValue(true)
                     .withDescription(
                             "Allow to fallback to hadoop File IO when no file io found for the scheme.");
+
+    public static final Set<String> PAIMON_CATALOG_OPTIONS =
+            new HashSet<String>() {
+                {
+                    add(WAREHOUSE.key());
+                    add(METASTORE.key());
+                    add(URI.key());
+                    add(TABLE_TYPE.key());
+                    add(LOCK_ENABLED.key());
+                    add(LOCK_CHECK_MAX_SLEEP.key());
+                    add(LOCK_ACQUIRE_TIMEOUT.key());
+                    add(FS_ALLOW_HADOOP_FALLBACK.key());
+                }
+            };
 }

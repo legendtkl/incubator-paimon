@@ -21,6 +21,7 @@ package org.apache.paimon.flink;
 import org.apache.paimon.annotation.VisibleForTesting;
 import org.apache.paimon.catalog.Catalog;
 import org.apache.paimon.catalog.Identifier;
+import org.apache.paimon.options.CatalogOptions;
 import org.apache.paimon.schema.Schema;
 import org.apache.paimon.schema.SchemaChange;
 import org.apache.paimon.table.FileStoreTable;
@@ -210,10 +211,20 @@ public class FlinkCatalog extends AbstractCatalog {
         }
 
         // remove table path
-        String specific = options.remove(PATH.key());
-        if (specific != null) {
-            catalogTable = catalogTable.copy(options);
+        options.remove(PATH.key());
+
+        // Put Paimon catalog global options into table options
+        // ref https://github.com/apache/incubator-paimon/issues/754
+        if (catalog instanceof org.apache.paimon.catalog.AbstractCatalog) {
+            Map<String, String> catalogOptions =
+                    ((org.apache.paimon.catalog.AbstractCatalog) catalog).getOptions();
+            catalogOptions.keySet().stream()
+                    .filter(key -> !CatalogOptions.PAIMON_CATALOG_OPTIONS.contains(key))
+                    .filter(key -> !options.keySet().contains(key))
+                    .forEach(key -> options.put(key, catalogOptions.get(key)));
         }
+
+        catalogTable = catalogTable.copy(options);
 
         try {
             catalog.createTable(

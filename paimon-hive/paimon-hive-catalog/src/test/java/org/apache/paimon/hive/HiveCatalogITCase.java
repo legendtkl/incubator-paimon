@@ -54,6 +54,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -596,6 +597,50 @@ public class HiveCatalogITCase {
                         .get()
                         .options()
                         .isEmpty());
+    }
+
+    @Test
+    public void testCatalogOptionsInheritAndOverride() throws Exception {
+        tEnv.executeSql(
+                        String.join(
+                                "\n",
+                                "CREATE CATALOG my_hive_options WITH (",
+                                "  'type' = 'paimon',",
+                                "  'metastore' = 'hive',",
+                                "  'uri' = '',",
+                                "  'warehouse' = '" + path + "',",
+                                "  'lock.enabled' = 'true',",
+                                "  'opt1' = 'value1',",
+                                "  'opt2' = 'value2',",
+                                "  'opt3' = 'value3',",
+                                "  'lock.enabled' = 'true'",
+                                ")"))
+                .await();
+        tEnv.executeSql("USE CATALOG my_hive_options").await();
+
+        // check inherit
+        tEnv.executeSql("CREATE TABLE table_with_options (a INT, b STRING)").await();
+
+        Identifier identifier = new Identifier("default", "t1_options");
+        Catalog catalog =
+                ((FlinkCatalog) tEnv.getCatalog(tEnv.getCurrentCatalog()).get()).catalog();
+        Map<String, String> tableOptions = catalog.getTable(identifier).options();
+
+        Assertions.assertThat(tableOptions).containsEntry("opt1", "value1");
+        Assertions.assertThat(tableOptions).containsEntry("opt2", "value2");
+        Assertions.assertThat(tableOptions).containsEntry("opt3", "value3");
+        Assertions.assertThat(tableOptions).doesNotContainKey("lock.enabled");
+
+        // check override
+        tEnv.executeSql(
+                        "CREATE TABLE table_with_options (a INT, b STRING) WITH ('opt1' = 'new_value')")
+                .await();
+        tableOptions = catalog.getTable(identifier).options();
+
+        Assertions.assertThat(tableOptions).containsEntry("opt1", "new_value");
+        Assertions.assertThat(tableOptions).containsEntry("opt2", "value2");
+        Assertions.assertThat(tableOptions).containsEntry("opt3", "value3");
+        Assertions.assertThat(tableOptions).doesNotContainKey("lock.enabled");
     }
 
     private List<Row> collect(String sql) throws Exception {

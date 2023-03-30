@@ -28,6 +28,9 @@ import org.apache.paimon.table.Table;
 import org.apache.paimon.table.system.SystemTableLoader;
 import org.apache.paimon.utils.StringUtils;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /** Common implementation of {@link Catalog}. */
 public abstract class AbstractCatalog implements Catalog {
 
@@ -35,8 +38,16 @@ public abstract class AbstractCatalog implements Catalog {
 
     protected final FileIO fileIO;
 
+    protected final Map<String, String> options;
+
     protected AbstractCatalog(FileIO fileIO) {
         this.fileIO = fileIO;
+        this.options = new HashMap<>();
+    }
+
+    protected AbstractCatalog(FileIO fileIO, Map<String, String> options) {
+        this.fileIO = fileIO;
+        this.options = options;
     }
 
     @Override
@@ -103,5 +114,9 @@ public abstract class AbstractCatalog implements Catalog {
                             + identifier.getObjectName());
         }
         return splits;
+    }
+
+    public Map<String, String> getOptions() {
+        return options;
     }
 }

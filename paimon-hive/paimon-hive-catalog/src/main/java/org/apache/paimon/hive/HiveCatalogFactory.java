@@ -69,6 +69,10 @@ public class HiveCatalogFactory implements CatalogFactory {
         hadoopConfig.set(
                 HiveConf.ConfVars.METASTOREWAREHOUSE.varname, warehouse.toUri().toString());
 
-        return new HiveCatalog(fileIO, hadoopConfig, context.options().get(METASTORE_CLIENT_CLASS));
+        return new HiveCatalog(
+                fileIO,
+                hadoopConfig,
+                context.options().get(METASTORE_CLIENT_CLASS),
+                context.options().toMap());
     }
 }
