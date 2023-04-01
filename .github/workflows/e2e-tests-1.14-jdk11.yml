@@ -24,7 +24,7 @@ on:
 
   # daily run
   schedule:
-    - cron: "*/2 * * * *"
+    - cron: "*/5 * * * *"
 
 env:
   JDK_VERSION: 11
