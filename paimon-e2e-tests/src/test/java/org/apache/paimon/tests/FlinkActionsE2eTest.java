@@ -20,6 +20,7 @@ package org.apache.paimon.tests;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.Container;
@@ -328,6 +329,38 @@ public class FlinkActionsE2eTest extends E2eTestBase {
 
         // check the left data
         checkResult("1, Hi", "2, World");
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "test.flink.version", matches = "1.17.*")
+    public void testFlink17Delete() throws Exception {
+        String tableDdl =
+                "CREATE TABLE IF NOT EXISTS ts_table (\n"
+                        + "    dt STRING,\n"
+                        + "    k int,\n"
+                        + "    v int,\n"
+                        + "    PRIMARY KEY (k, dt) NOT ENFORCED\n"
+                        + ") PARTITIONED BY (dt);";
+
+        String insert =
+                "INSERT INTO ts_table VALUES ('2023-01-13', 0, 15), ('2023-01-14', 0, 19), ('2023-01-13', 0, 39), "
+                        + "('2023-01-15', 0, 34), ('2023-01-15', 0, 56), ('2023-01-15', 0, 37), "
+                        + "('2023-01-16', 1, 25), ('2023-01-17', 1, 50), ('2023-01-18', 1, 75), "
+                        + "('2023-01-19', 1, 23), ('2023-01-20', 1, 28), ('2023-01-21', 1, 31), "
+                        + "('2023-01-22', 2, 41), ('2023-01-23', 2, 42), ('2023-01-24', 2, 43);";
+
+        runSql("SET 'table.dml-sync' = 'true';\n" + insert, catalogDdl, useCatalogCmd, tableDdl);
+
+        // runSql("DELETE FROM ts_table WHERE (k = 1 OR k = 2);");
+
+        // check the left data
+        checkResult(
+                "'2023-01-13', 0, 15",
+                "'2023-01-14', 0, 19",
+                "'2023-01-13', 0, 39",
+                "'2023-01-15', 0, 34",
+                "'2023-01-15', 0, 56",
+                "'2023-01-15', 0, 37");
     }
 
     private void runSql(String sql, String... ddls) throws Exception {

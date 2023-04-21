@@ -24,37 +24,54 @@ import org.apache.paimon.CoreOptions.MergeEngine;
 import org.apache.paimon.catalog.CatalogLock;
 import org.apache.paimon.flink.FlinkCatalog;
 import org.apache.paimon.flink.FlinkConnectorOptions;
+import org.apache.paimon.flink.LogicalTypeConversion;
 import org.apache.paimon.flink.PaimonDataStreamSinkProvider;
+import org.apache.paimon.flink.PredicateConverter;
 import org.apache.paimon.flink.log.LogSinkProvider;
 import org.apache.paimon.flink.log.LogStoreTableFactory;
 import org.apache.paimon.operation.Lock;
 import org.apache.paimon.options.Options;
+import org.apache.paimon.predicate.Predicate;
 import org.apache.paimon.table.AppendOnlyFileStoreTable;
 import org.apache.paimon.table.ChangelogValueCountFileStoreTable;
 import org.apache.paimon.table.ChangelogWithKeyFileStoreTable;
 import org.apache.paimon.table.FileStoreTable;
 import org.apache.paimon.table.Table;
+import org.apache.paimon.table.TableUtils;
 
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.connector.ChangelogMode;
+import org.apache.flink.table.connector.RowLevelModificationScanContext;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
+import org.apache.flink.table.connector.sink.abilities.SupportsDeletePushDown;
 import org.apache.flink.table.connector.sink.abilities.SupportsOverwrite;
 import org.apache.flink.table.connector.sink.abilities.SupportsPartitioning;
+import org.apache.flink.table.connector.sink.abilities.SupportsRowLevelDelete;
+import org.apache.flink.table.expressions.ResolvedExpression;
 import org.apache.flink.table.factories.DynamicTableFactory;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.RowKind;
 
 import javax.annotation.Nullable;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.paimon.CoreOptions.CHANGELOG_PRODUCER;
 import static org.apache.paimon.CoreOptions.LOG_CHANGELOG_MODE;
 import static org.apache.paimon.CoreOptions.MERGE_ENGINE;
 
 /** Table sink to create sink. */
-public class FlinkTableSink implements DynamicTableSink, SupportsOverwrite, SupportsPartitioning {
+public class FlinkTableSink
+        implements DynamicTableSink,
+                SupportsOverwrite,
+                SupportsPartitioning,
+                SupportsRowLevelDelete,
+                SupportsDeletePushDown {
 
     private final ObjectIdentifier tableIdentifier;
     private final Table table;
@@ -64,6 +81,8 @@ public class FlinkTableSink implements DynamicTableSink, SupportsOverwrite, Supp
     private Map<String, String> staticPartitions = new HashMap<>();
     private boolean overwrite = false;
     @Nullable private CatalogLock.Factory lockFactory;
+
+    List<Predicate> predicates;
 
     public FlinkTableSink(
             ObjectIdentifier tableIdentifier,
@@ -181,5 +200,31 @@ public class FlinkTableSink implements DynamicTableSink, SupportsOverwrite, Supp
 
     public void setLockFactory(@Nullable CatalogLock.Factory lockFactory) {
         this.lockFactory = lockFactory;
+    }
+
+    @Override
+    public RowLevelDeleteInfo applyRowLevelDelete(
+            @Nullable RowLevelModificationScanContext rowLevelModificationScanContext) {
+        return new RowLevelDeleteInfo() {};
+    }
+
+    @Override
+    public boolean applyDeleteFilters(List<ResolvedExpression> list) {
+        List<Predicate> predicates = new ArrayList<>();
+        RowType rowType = LogicalTypeConversion.toLogicalType(table.rowType());
+        for (ResolvedExpression filter : list) {
+            PredicateConverter.convert(rowType, filter).ifPresent(predicates::add);
+        }
+        return true;
+    }
+
+    @Override
+    public Optional<Long> executeDeletion() {
+        TableUtils.deleteWhere(
+                table,
+                predicates,
+                Lock.factory(
+                        lockFactory, FlinkCatalog.toIdentifier(tableIdentifier.toObjectPath())));
+        return Optional.empty();
     }
 }
