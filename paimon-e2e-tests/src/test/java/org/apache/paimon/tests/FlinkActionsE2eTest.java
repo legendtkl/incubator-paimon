@@ -349,9 +349,16 @@ public class FlinkActionsE2eTest extends E2eTestBase {
                         + "('2023-01-19', 1, 23), ('2023-01-20', 1, 28), ('2023-01-21', 1, 31), "
                         + "('2023-01-22', 2, 41), ('2023-01-23', 2, 42), ('2023-01-24', 2, 43);";
 
-        runSql("SET 'table.dml-sync' = 'true';\n" + insert, catalogDdl, useCatalogCmd, tableDdl);
+        String delete = "DELETE FROM ts_table WHERE (k = 1 OR k = 2);";
 
-        // runSql("DELETE FROM ts_table WHERE (k = 1 OR k = 2);");
+        runSql(
+                "SET 'table.dml-sync' = 'true';\n"
+                        + insert
+                        + "\nSET 'execution.runtime-mode' = 'batch';\n"
+                        + delete,
+                catalogDdl,
+                useCatalogCmd,
+                tableDdl);
 
         // check the left data
         checkResult(

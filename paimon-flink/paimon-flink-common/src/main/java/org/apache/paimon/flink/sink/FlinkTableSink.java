@@ -210,7 +210,7 @@ public class FlinkTableSink
 
     @Override
     public boolean applyDeleteFilters(List<ResolvedExpression> list) {
-        List<Predicate> predicates = new ArrayList<>();
+        predicates = new ArrayList<>();
         RowType rowType = LogicalTypeConversion.toLogicalType(table.rowType());
         for (ResolvedExpression filter : list) {
             PredicateConverter.convert(rowType, filter).ifPresent(predicates::add);
@@ -220,11 +220,12 @@ public class FlinkTableSink
 
     @Override
     public Optional<Long> executeDeletion() {
-        TableUtils.deleteWhere(
-                table,
-                predicates,
-                Lock.factory(
-                        lockFactory, FlinkCatalog.toIdentifier(tableIdentifier.toObjectPath())));
-        return Optional.empty();
+        return Optional.of(
+                TableUtils.deleteWhere(
+                        table,
+                        predicates,
+                        Lock.factory(
+                                lockFactory,
+                                FlinkCatalog.toIdentifier(tableIdentifier.toObjectPath()))));
     }
 }

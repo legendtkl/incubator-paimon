@@ -42,10 +42,11 @@ public class TableUtils {
      *
      * <p>NOTE: This method is only suitable for deletion of small amount of data.
      */
-    public static void deleteWhere(Table table, List<Predicate> filters, Lock.Factory lockFactory) {
+    public static Long deleteWhere(Table table, List<Predicate> filters, Lock.Factory lockFactory) {
         ReadBuilder readBuilder = table.newReadBuilder().withFilter(filters);
         BatchWriteBuilder writeBuilder = table.newBatchWriteBuilder();
         List<Split> splits = readBuilder.newScan().plan().splits();
+        Long hit = 0L;
         try (RecordReader<InternalRow> reader = readBuilder.newRead().createReader(splits);
                 BatchTableWrite write = writeBuilder.newWrite();
                 BatchTableCommit commit =
@@ -56,12 +57,14 @@ public class TableUtils {
             while (iterator.hasNext()) {
                 InternalRow row = iterator.next();
                 if (filter.test(row)) {
+                    hit++;
                     row.setRowKind(RowKind.DELETE);
                     write.write(row);
                 }
             }
 
             commit.commit(write.prepareCommit());
+            return hit;
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
